@@ -1,6 +1,17 @@
-# Claude Code Docker
+# Claudainer
 
-Run Claude Code CLI in a container with persistent auth and shared project memory.
+Full-stack dev environment with Claude Code CLI in Docker/Kubernetes.
+
+## What's Included
+
+| Category | Tools |
+|-|-|
+| **Languages** | Node.js 22, Python 3, Go 1.23, Rust, Zig 0.13 |
+| **Build** | gcc, g++, make, cmake, pkg-config, autoconf |
+| **CLI** | jq, yq, vim, neovim, tmux, htop, ripgrep, fzf, bat, fd |
+| **Cloud/K8s** | kubectl, helm, terraform, docker CLI |
+| **Dev** | git, gh (GitHub CLI), ssh |
+| **AI** | Claude Code (native binary) |
 
 ## Quick Start
 
@@ -12,7 +23,6 @@ Or with docker-compose:
 
 ```bash
 cp .env.example .env
-# Edit .env with your settings
 docker-compose run --rm claude
 ```
 
@@ -23,8 +33,8 @@ Copy `.env.example` to `.env` and adjust:
 | Variable | Default | Description |
 |-|-|-|
 | `USERNAME` | dev | Container username |
-| `USER_HOME` | /home/dev | Home path (match host for consistent paths) |
-| `USER_UID` | 1000 | User ID (match host for file permissions) |
+| `USER_HOME` | /home/dev | Home path |
+| `USER_UID` | 1000 | User ID (match host) |
 | `USER_GID` | 1000 | Group ID |
 | `HOST_CODE_DIR` | ~/code | Code directory to mount |
 | `HOST_CLAUDE_PROJECTS` | ~/.claude/projects | Shared projects memory |
@@ -41,17 +51,12 @@ USER_GID=20
 
 ## Passing Flags
 
-Pass flags via `CLAUDE_FLAGS` env var or directly:
-
 ```bash
 # Via env var
 CLAUDE_FLAGS="--dangerously-skip-permissions" ./run.sh
 
 # Direct
 ./run.sh --dangerously-skip-permissions
-
-# In .env
-CLAUDE_FLAGS=--dangerously-skip-permissions
 ```
 
 Common flags:
@@ -59,53 +64,57 @@ Common flags:
 - `--allowedTools "Bash,Read,Edit"` - Whitelist specific tools
 - `--model sonnet` - Use a specific model
 
-## Mount Strategy
+## Docker-out-of-Docker
 
-- **claude-data volume**: Container's own `.claude` (sessions, cache, state)
-- **projects bind mount**: Shared across hosts - Claude remembers your projects everywhere
-- **code bind mount**: Your work directories
+The container mounts `/var/run/docker.sock` so you can run docker commands from inside:
+
+```bash
+docker ps  # works inside the container
+```
 
 ## Multi-arch Build
 
 ```bash
-docker buildx build --platform linux/amd64,linux/arm64 -t claude-code:latest .
+docker buildx build --platform linux/amd64,linux/arm64 -t claudainer:latest .
 ```
 
-## First Run
+## Pre-authenticated Containers
 
-On first run, Claude will prompt for authentication. The auth token persists in the `claude-data` volume.
+Option 1: Mount credentials (uncomment in docker-compose.yml):
+```yaml
+- ~/.claude/credentials.json:/home/dev/.claude/credentials.json:ro
+```
 
-## Running on Another Device
-
-1. Copy this directory to the other device
-2. Sync `~/.claude/projects` (rsync, syncthing, NFS, whatever)
-3. Run `./run.sh` - auth once, then you're set
+Option 2: Login once, credentials persist in volume:
+```bash
+./run.sh login
+```
 
 ## Kubernetes
 
-Deploy to a cluster:
-
 ```bash
-# Deploy
 kubectl apply -k k8s/
 
-# First time: login to authenticate
+# First time: login
 kubectl exec -it -n claude claude-0 -- claude login
 
-# Restart pod to start remote-control server
+# Restart to start remote-control server
 kubectl rollout restart statefulset -n claude claude
 ```
 
-The pod runs `claude remote-control --spawn worktree` which:
-- Accepts up to 32 concurrent sessions
-- Each session gets its own git worktree (isolated)
-- Connect from any device via claude.ai or `claude --connect`
+The pod runs `claude remote-control --spawn worktree`:
+- Up to 32 concurrent sessions
+- Each session gets isolated git worktree
+- Connect from any device via claude.ai
 
-To enable flags, edit the `CLAUDE_FLAGS` env var in `k8s/statefulset.yaml`.
+## Version Pinning
 
-Check logs for the session URL:
+Build args for specific versions:
+
 ```bash
-kubectl logs -n claude claude-0
+docker build \
+  --build-arg NODE_VERSION=22 \
+  --build-arg GO_VERSION=1.23.2 \
+  --build-arg ZIG_VERSION=0.13.0 \
+  -t claudainer:latest .
 ```
-
-For code access, replace the `emptyDir` volume with a PVC or NFS mount.

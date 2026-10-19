@@ -31,6 +31,12 @@ services:
       # Git config (read-only)
       - ${HOST_GITCONFIG:-~/.gitconfig}:${USER_HOME:-/home/dev}/.gitconfig:ro
 
+      # Docker socket (for docker-out-of-docker)
+      - /var/run/docker.sock:/var/run/docker.sock
+
+      # Optional: mount existing claude credentials for pre-auth
+      # - ${HOST_CLAUDE_CREDENTIALS:-~/.claude/credentials.json}:${USER_HOME:-/home/dev}/.claude/credentials.json:ro
+
 volumes:
   claude-data:
     name: ${VOLUME_NAME:-claude-data}
