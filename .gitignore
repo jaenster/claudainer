@@ -1,0 +1,21 @@
+# Environment files with secrets
+.env
+*.env.local
+
+# Kubernetes secrets
+k8s/secret.yaml
+k8s/secrets/
+
+# Credentials
+credentials.json
+*.pem
+*.key
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.idea/
+.vscode/
+*.swp

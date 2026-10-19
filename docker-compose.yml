@@ -1,0 +1,36 @@
+services:
+  claude:
+    build:
+      context: .
+      args:
+        USER_UID: ${USER_UID:-1000}
+        USER_GID: ${USER_GID:-1000}
+        USERNAME: ${USERNAME:-dev}
+        USER_HOME: ${USER_HOME:-/home/dev}
+    image: ${IMAGE_NAME:-claude-code}:${IMAGE_TAG:-latest}
+    stdin_open: true
+    tty: true
+    hostname: claude-docker
+    environment:
+      - CLAUDE_FLAGS=${CLAUDE_FLAGS:-}
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["claude $CLAUDE_FLAGS \"$@\"", "--"]
+    volumes:
+      # Container's own .claude directory (sessions, cache, state)
+      - claude-data:${USER_HOME:-/home/dev}/.claude
+
+      # Shared projects directory - memory synced across hosts
+      - ${HOST_CLAUDE_PROJECTS:-~/.claude/projects}:${USER_HOME:-/home/dev}/.claude/projects
+
+      # Work directories - mount at same paths for consistent references
+      - ${HOST_CODE_DIR:-~/code}:${USER_HOME:-/home/dev}/code
+
+      # SSH keys for git operations (read-only)
+      - ${HOST_SSH_DIR:-~/.ssh}:${USER_HOME:-/home/dev}/.ssh:ro
+
+      # Git config (read-only)
+      - ${HOST_GITCONFIG:-~/.gitconfig}:${USER_HOME:-/home/dev}/.gitconfig:ro
+
+volumes:
+  claude-data:
+    name: ${VOLUME_NAME:-claude-data}

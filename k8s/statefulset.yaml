@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: claude
+  namespace: claude
+spec:
+  serviceName: claude
+  replicas: 1
+  selector:
+    matchLabels:
+      app: claude
+  template:
+    metadata:
+      labels:
+        app: claude
+    spec:
+      containers:
+        - name: claude
+          image: claude-code:latest  # replace with your registry
+          imagePullPolicy: Always
+          # Remote control server - accepts connections from any device
+          # First run: exec in and run 'claude login' to authenticate
+          # Then restart pod or run 'claude remote-control'
+          command:
+            - sh
+            - -c
+            - |
+              if [ -f "$HOME/.claude/credentials.json" ]; then
+                exec claude remote-control $CLAUDE_FLAGS --spawn worktree
+              else
+                echo "No credentials found. Run: kubectl exec -it -n claude claude-0 -- claude login"
+                exec sleep infinity
+              fi
+          env:
+            - name: CLAUDE_FLAGS
+              value: ""  # e.g. "--dangerously-skip-permissions"
+          volumeMounts:
+            - name: claude-data
+              mountPath: /home/dev/.claude
+            - name: code
+              mountPath: /home/dev/code
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 2000m
+              memory: 2Gi
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+      volumes:
+        - name: claude-data
+          persistentVolumeClaim:
+            claimName: claude-data
+        - name: code
+          emptyDir: {}  # replace with PVC or NFS for real code access
+      securityContext:
+        fsGroup: 1000
