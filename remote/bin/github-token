@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# Prints a GitHub token for git and gh.
+#   GITHUB_PAT set                       -> print it as-is
+#   GITHUB_APP_ID + GITHUB_APP_KEY_FILE  -> mint an installation token, cached until ~10 min before expiry
+set -euo pipefail
+
+if [ -n "${GITHUB_PAT:-}" ]; then
+    printf '%s\n' "$GITHUB_PAT"
+    exit 0
+fi
+
+: "${GITHUB_APP_ID:?neither GITHUB_PAT nor GITHUB_APP_ID is set}"
+: "${GITHUB_APP_KEY_FILE:?GITHUB_APP_KEY_FILE is not set}"
+
+cache="${XDG_CACHE_HOME:-$HOME/.cache}/github-app-token"
+now=$(date +%s)
+
+if [ -f "$cache" ]; then
+    read -r token expires < "$cache" || true
+    if [ -n "${token:-}" ] && [ "$((expires - now))" -gt 600 ]; then
+        printf '%s\n' "$token"
+        exit 0
+    fi
+fi
+
+b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
+
+header=$(printf '{"alg":"RS256","typ":"JWT"}' | b64url)
+payload=$(printf '{"iat":%d,"exp":%d,"iss":"%s"}' "$((now - 60))" "$((now + 540))" "$GITHUB_APP_ID" | b64url)
+signature=$(printf '%s.%s' "$header" "$payload" | openssl dgst -sha256 -sign "$GITHUB_APP_KEY_FILE" | b64url)
+jwt="$header.$payload.$signature"
+
+api() {
+    curl -fsS -X "$1" "https://api.github.com$2" \
+        -H "Authorization: Bearer $jwt" \
+        -H "Accept: application/vnd.github+json" \
+        -H "X-GitHub-Api-Version: 2022-11-28"
+}
+
+installation="${GITHUB_APP_INSTALLATION_ID:-}"
+if [ -z "$installation" ]; then
+    installation=$(api GET /app/installations | jq -er '.[0].id')
+fi
+
+response=$(api POST "/app/installations/$installation/access_tokens")
+token=$(jq -er .token <<< "$response")
+expires=$(date -d "$(jq -er .expires_at <<< "$response")" +%s)
+
+mkdir -p "$(dirname "$cache")"
+umask 077
+printf '%s %s\n' "$token" "$expires" > "$cache"
+printf '%s\n' "$token"

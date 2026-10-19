@@ -90,6 +90,27 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     && apt-get update && apt-get install -y gh \
     && rm -rf /var/lib/apt/lists/*
 
+# 1Password CLI (headless via OP_SERVICE_ACCOUNT_TOKEN)
+RUN curl -fsSL https://downloads.1password.com/linux/keys/1password.asc \
+    | gpg --dearmor -o /usr/share/keyrings/1password-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/$(dpkg --print-architecture) stable main" \
+    > /etc/apt/sources.list.d/1password.list \
+    && apt-get update && apt-get install -y 1password-cli \
+    && rm -rf /var/lib/apt/lists/*
+
+# Chromium for puppeteer, via Playwright since it ships builds for amd64 and arm64
+ARG PLAYWRIGHT_VERSION=1.55.0
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
+RUN npx -y playwright@${PLAYWRIGHT_VERSION} install --with-deps chromium \
+    && ln -s "$(find ${PLAYWRIGHT_BROWSERS_PATH} -type f -name chrome -path '*/chromium-*' | head -1)" /usr/local/bin/chromium \
+    && chromium --version \
+    && rm -rf /var/lib/apt/lists/* /root/.npm
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/local/bin/chromium
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+
+# MCP servers that are not run through npx
+RUN npm install -g ts-lsp-mcp mongodb-mcp-server && rm -rf /root/.npm
+
 # Configurable user
 ARG USER_UID=1000
 ARG USER_GID=1000
@@ -110,7 +131,12 @@ WORKDIR ${USER_HOME}
 RUN echo 'export PATH="$HOME/.local/bin:/usr/local/go/bin:/usr/local/cargo/bin:$PATH"' >> ~/.bashrc
 
 # Claude Code native binary
-RUN curl -fsSL https://claude.ai/install.sh | bash
+# Also copied to /usr/local/bin so it survives a volume mounted over $HOME.
+RUN curl -fsSL https://claude.ai/install.sh | bash \
+    && sudo cp "$(readlink -f ${USER_HOME}/.local/bin/claude)" /usr/local/bin/claude
+
+# Remote Control entrypoint and GitHub token helpers (used by the k8s deployment)
+COPY remote/ /opt/claudainer/
 
 ENV PATH="${USER_HOME}/.local/bin:/usr/local/go/bin:/usr/local/cargo/bin:${PATH}"
 ENV HOME="${USER_HOME}"

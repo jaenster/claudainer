@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Runs the real gh with a fresh token from github-token.
+set -euo pipefail
+
+GH_TOKEN="$(github-token)" exec /usr/bin/gh "$@"
