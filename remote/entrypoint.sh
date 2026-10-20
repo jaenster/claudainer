@@ -27,7 +27,8 @@ git config --global url.https://github.com/.insteadOf git@github.com:
 if [ -n "${GIT_SIGNING_KEY:-}" ]; then
     key="$HOME/.ssh/signing_key"
     mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"
-    (umask 077 && printf '%s\n' "$GIT_SIGNING_KEY" > "$key")
+    # chmod, not just umask: an fsGroup volume makes an existing key group-readable on every mount.
+    (umask 077 && printf '%s\n' "$GIT_SIGNING_KEY" > "$key") && chmod 600 "$key"
     if ssh-keygen -y -f "$key" > "$key.pub" 2>/dev/null; then
         git config --global gpg.format ssh
         git config --global user.signingkey "$key"
