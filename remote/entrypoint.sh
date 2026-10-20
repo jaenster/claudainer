@@ -23,6 +23,24 @@ git config --global --replace-all credential.https://github.com.helper ''
 git config --global --add credential.https://github.com.helper /opt/claudainer/bin/git-credential-github
 git config --global url.https://github.com/.insteadOf git@github.com:
 
+# Commit signing with an SSH key handed in through the secret (GIT_SIGNING_KEY, the private key).
+if [ -n "${GIT_SIGNING_KEY:-}" ]; then
+    key="$HOME/.ssh/signing_key"
+    mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"
+    (umask 077 && printf '%s\n' "$GIT_SIGNING_KEY" > "$key")
+    if ssh-keygen -y -f "$key" > "$key.pub" 2>/dev/null; then
+        git config --global gpg.format ssh
+        git config --global user.signingkey "$key"
+        git config --global commit.gpgsign true
+        git config --global tag.gpgsign true
+        printf '%s %s\n' "$GIT_USER_EMAIL" "$(cat "$key.pub")" > "$HOME/.ssh/allowed_signers"
+        git config --global gpg.ssh.allowedSignersFile "$HOME/.ssh/allowed_signers"
+        echo "git: signing commits with $(ssh-keygen -lf "$key.pub" | cut -d' ' -f2)"
+    else
+        echo "git: GIT_SIGNING_KEY is not a usable private key (passphrase?), commits stay unsigned" >&2
+    fi
+fi
+
 if [ -n "${GITHUB_PAT:-}${GITHUB_APP_ID:-}" ]; then
     if login=$(gh api /user --jq .login 2>/dev/null); then
         echo "github: authenticated as $login"
