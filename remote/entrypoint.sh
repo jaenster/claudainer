@@ -105,10 +105,11 @@ if [ -f "$CLAUDAINER_CONFIG/settings.json" ]; then
     jq -s '.[0] * .[1]' "$settings" "$CLAUDAINER_CONFIG/settings.json" > "$settings.tmp" && mv "$settings.tmp" "$settings"
 fi
 
-# Nobody is there to answer the trust prompt.
+# Nobody is there to answer the trust prompt or the "Enable Remote Control? (y/n)" question;
+# an unanswered question reads EOF and remote-control exits.
 state="$HOME/.claude.json"
 [ -s "$state" ] || echo '{}' > "$state"
-jq --arg ws "$WORKSPACE" '.projects[$ws].hasTrustDialogAccepted = true' "$state" > "$state.tmp" && mv "$state.tmp" "$state"
+jq --arg ws "$WORKSPACE" '.projects[$ws].hasTrustDialogAccepted = true | .remoteDialogSeen = true' "$state" > "$state.tmp" && mv "$state.tmp" "$state"
 
 # Remote Control needs a full account login; setup-token / CLAUDE_CODE_OAUTH_TOKEN is inference-only.
 if ! claude auth status >/dev/null 2>&1; then
