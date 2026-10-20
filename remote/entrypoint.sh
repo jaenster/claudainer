@@ -84,6 +84,27 @@ if [ -f "$CLAUDAINER_CONFIG/mcp.json" ]; then
     done
 fi
 
+# Hooks and settings from the mounted config (flat ConfigMap keys):
+#   claude-hook-<name>  -> ~/.claude/hooks/<name>
+#   git-hook-<name>     -> ~/.config/git/hooks/<name>, used as the global core.hooksPath
+#   settings.json       -> merged over ~/.claude/settings.json
+for f in "$CLAUDAINER_CONFIG"/claude-hook-* "$CLAUDAINER_CONFIG"/git-hook-*; do
+    [ -f "$f" ] || continue
+    name=$(basename "$f")
+    case "$name" in
+        claude-hook-*) dir="$HOME/.claude/hooks"; name=${name#claude-hook-} ;;
+        git-hook-*)    dir="$HOME/.config/git/hooks"; name=${name#git-hook-} ;;
+    esac
+    mkdir -p "$dir"
+    install -m 755 "$f" "$dir/$name"
+done
+[ -d "$HOME/.config/git/hooks" ] && git config --global core.hooksPath "$HOME/.config/git/hooks"
+if [ -f "$CLAUDAINER_CONFIG/settings.json" ]; then
+    settings="$HOME/.claude/settings.json"
+    [ -s "$settings" ] || echo '{}' > "$settings"
+    jq -s '.[0] * .[1]' "$settings" "$CLAUDAINER_CONFIG/settings.json" > "$settings.tmp" && mv "$settings.tmp" "$settings"
+fi
+
 # Nobody is there to answer the trust prompt.
 state="$HOME/.claude.json"
 [ -s "$state" ] || echo '{}' > "$state"
