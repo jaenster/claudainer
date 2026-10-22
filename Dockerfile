@@ -34,8 +34,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Node.js (via NodeSource)
 ARG NODE_VERSION=22
+ARG NODE_PINNED=22.23.4
 RUN curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash - \
-    && apt-get install -y nodejs \
+    && apt-get install -y "nodejs=${NODE_PINNED}-1nodesource1" \
     && npm install -g pnpm yarn \
     && rm -rf /var/lib/apt/lists/*
 
